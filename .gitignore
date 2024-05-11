@@ -1,0 +1,4 @@
+/server/*
+!/server/functions/
+/server/functions/*
+!main.py
