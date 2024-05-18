@@ -2,3 +2,4 @@
 !/server/functions/
 /server/functions/*
 !main.py
+!gemini_script.py

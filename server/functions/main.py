@@ -8,9 +8,61 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
 from firebase_functions import https_fn, options
+import json
+from gemini_script import categorize_grocery_list
+
+# import google.generativeai as genai
+# import json
+
+# def load_api_key(file_path):
+#     """Loads the Gemini API key from a JSON file."""
+
+#     with open(file_path, "r") as f:
+#         credentials = json.load(f)
+#     api_key = credentials.get("gemini_api_key")
+#     if not api_key:
+#         raise ValueError(f"Missing 'gemini_api_key' key in {file_path}.")
+#     return api_key
+
+# def categorize_grocery_list(grocery_list):
+#     """Categorizes a grocery list into supermarket sections using Gemini."""
+
+#     try:
+#         api_key = load_api_key("gemini-key.json") 
+#         genai.configure(api_key=api_key)
+
+#         model = genai.GenerativeModel()
+
+#         prompt = f"You have to categorize items in a grocery list to help a customer finding the right supermarket section for every product in the list. I will give you in input the list and you have to return more list divided by category (supermarket section). The grocery list includes: {grocery_list}. Please categorize the items by supermarket section."
+#         response = model.generate_content(prompt)
+
+#         return response.text
+
+#     except Exception as e:  # Catch any unexpected errors
+#         print(f"Error categorizing grocery list: {e}")
+#         return []  # Return an empty list on error
+
+
+def create_dialogflow_response(message_text):
+    response = {
+        "fulfillment_response": {
+            "messages": [
+                {
+                    "text": {
+                        "text": [
+                            message_text
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+    return json.dumps(response)
+
 
 # Firebase app init
 cred = credentials.Certificate("chiave.json")
+
 firebase_admin.initialize_app(cred, {'databaseURL': 'https://nlp-chatbot-project-420413-default-rtdb.europe-west1.firebasedatabase.app/'})
 
 # Grocery list ref in db
@@ -45,12 +97,15 @@ def add_to_grocery_list(request):
                     items_added.append(item)
 
             if len(items_added) == 0:
-                return {"success": True, "message": "No element was added to grocery list. They were all already in."} 
+                response_no_items_added = create_dialogflow_response("No element was added to grocery list. They were all already in.")
+                return response_no_items_added
             else:
-                return {"success": True, "message": f"New items added to grocery list successfully: {items_added} are now in the list."}
+                response_items_added = create_dialogflow_response(f"New items added to grocery list successfully: {items_added} are now in the list.")
+                return response_items_added
     except Exception as e:
+        response_error = create_dialogflow_response(f"Error adding new items: {e}")
         print("Error adding new items:", e)
-        return {"success": False, "error": "Internal server error"}, 500
+        return response_error, 500
 
 
 # HTTP REQUEST: remove (given strings) elements from the grocery list
@@ -88,33 +143,42 @@ def remove_from_grocery_list(request):
                             items_removed.append(item)
                 
             if len(items_removed) == 0:
-                return {"success": True, "message": "No element was removed from grocery list. They were not in."} 
+                response_no_items_removed = create_dialogflow_response("No element was removed from grocery list. They were not in.")
+                return response_no_items_removed
             else:
-                return {"success": True, "message": f"Items removed from grocery list successfully: {items_removed} are no longer in the list."}
+                response_items_removed = create_dialogflow_response(f"Items removed from grocery list successfully: {items_removed} are no longer in the list.")
+                return response_items_removed
+            
     except Exception as e:
         print("Error removing items:", e)
-        return {"success": False, "error": "Internal server error"}, 500
+        response_error = create_dialogflow_response(f"Error adding new items: {e}")
+        print("Error removing items:", e)
+        return response_error, 500
 
 # HTTP REQUEST: view grocery list
 @https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["get"]))
 def view_grocery_list(request):
     try:
         items_in = list(grocery_list_ref.get().values())
-        # Default value if data 
-        if items_in is None:
-            return {"success": False, "error": "Items in the list are None-Type"}, 400
+        if not items_in:
+            response_no_items_in_the_list = create_dialogflow_response("The grocery list is empty.")
+            return response_no_items_in_the_list
         else:
-            return {"success": True, "message": f"Grocery list: {items_in}."}
+            response_categorized_items = create_dialogflow_response(categorize_grocery_list(items_in))
+            return response_categorized_items
     except Exception as e:
         print("Error reading items from grocery list:", e)
-        return {"success": False, "error": "Internal server error"}, 500
+        response_error = create_dialogflow_response(f"Error reading items from grocery list: {e}")
+        return response_error, 500
 
 # HTTP REQUEST: clear grocery list
 @https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["delete"]))
 def clear_grocery_list(request):
     try:
         grocery_list_ref.delete()
-        return {"success": True, "message": "All items removed from grocery list successfully."}
+        response_success_delete = create_dialogflow_response("All items removed from grocery list successfully.")
+        return response_success_delete
     except Exception as e:
         print("Error removing all items from grocery list:", e)
-        return {"success": False, "error": "Internal server error"}, 500
+        response_error = create_dialogflow_response(f"Error removing all items from grocery list: {e}")
+        return response_error, 500
