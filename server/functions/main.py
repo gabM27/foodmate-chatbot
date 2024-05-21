@@ -3,7 +3,8 @@ import firebase_admin
 from firebase_admin import credentials, db
 from firebase_functions import https_fn, options
 import json
-from gemini_script import categorize_grocery_list
+from gemini_api_script import categorize_grocery_list
+from edamam_nutrion_api_script import get_nutrition_data
 
 # Helper function to create Dialogflow response
 def create_dialogflow_response(message_text):
@@ -140,4 +141,28 @@ def clear_grocery_list(request):
     except Exception as e:
         print("Error removing all items from grocery list:", e)
         response_error = create_dialogflow_response(f"Error removing all items from grocery list: {e}")
+        return response_error, 500
+
+
+# HTTP REQUEST: get nutrion analysis from Edamam.com API
+@https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["get"]))
+def get_nutrition_analysis_single_ingredient(request):
+    try:
+        # Get JSON data from HTTP request
+        request_data = request.get_json()
+        if request_data is None:
+            return {"success": False, "error": "Request data is missing"}, 400
+
+        parameters = request_data.get("intentInfo", {}).get("parameters", {})
+        item_to_analyze = parameters.get("item", {}).get("resolvedValue", [])
+        print("paramatersss:" , parameters)
+        print("item to analysze: " , item_to_analyze)
+        nutrition_data = get_nutrition_data(item_to_analyze)
+        print("nuitritionas data", nutrition_data)
+        response_nutrition_data = create_dialogflow_response(f"{nutrition_data}")
+        print ("response_nutrition_data", response_nutrition_data)
+        return response_nutrition_data
+    except Exception as e:
+        print("Error analyzing nutrition data:", e)
+        response_error = create_dialogflow_response(f"Error analyzing nutrition data: {e}")
         return response_error, 500
