@@ -3,3 +3,4 @@
 /server/functions/*
 !main.py
 !gemini_api_script.py
+!edamam_nutrition_api_script.py

@@ -4,7 +4,7 @@ from firebase_admin import credentials, db
 from firebase_functions import https_fn, options
 import json
 from gemini_api_script import categorize_grocery_list
-from edamam_nutrion_api_script import get_nutrition_data
+from edamam_nutrition_api_script import get_nutrition_data
 
 # Helper function to create Dialogflow response
 def create_dialogflow_response(message_text):
