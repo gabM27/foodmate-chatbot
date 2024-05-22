@@ -2,7 +2,7 @@ import requests
 import json
 
 def load_api_key(file_path):
-    """Loads the Edamam API Id and key from a JSON file."""
+    """Loads the Edamam Nutrition API Id and key from a JSON file."""
 
     with open(file_path, "r") as f:
         credentials = json.load(f)
