@@ -8,7 +8,7 @@ def load_api_key(file_path):
         credentials = json.load(f)
     app_id = credentials.get("Application_ID")
     api_key = credentials.get("Application_Key")
-    if not app_id or api_key:
+    if not app_id or not api_key:
         raise ValueError(f"Missing 'Application_ID' or 'Application_Key' in {file_path}.")
     return app_id, api_key
 
@@ -28,7 +28,7 @@ def get_nutrition_data(ingredient):
             data = response.json()
             # Selezioniamo solo i campi desiderati con quantitativo e unità di misura
             filtered_data = {
-                "food_name": data["ingredients"][0]["parsed"][0]["food"] if data.get("ingredients") and data["ingredients"][0].get("parsed") else "Unknown",
+                "food_name": data["ingredients"][0]["parsed"][0]["foodMatch"] if data.get("ingredients") and data["ingredients"][0].get("parsed") else "Unknown",
                 "cautions": data.get("cautions", []),
                 "calories": {
                     "quantity": data["calories"],
@@ -53,7 +53,7 @@ def get_nutrition_data(ingredient):
                 "totalNutrientsKCal": data.get("totalNutrientsKCal", {})
             }
             
-            formatted_text = f"Food Name: {filtered_data['food_name']}\n"
+            formatted_text = f"Food Name Matched: {filtered_data['food_name']}\n"
     
             if filtered_data["cautions"]:
                 formatted_text += "Cautions: " + ", ".join(filtered_data["cautions"]) + "\n"
@@ -85,12 +85,20 @@ def get_nutrition_data(ingredient):
             else:
                 formatted_text += "Sodium (NA): Not available\n"
 
-            formatted_text += "Total Nutrients KCal:\n"
+            nutrient_mapping = {
+                "ENERC_KCAL": "Total Kcal",
+                "PROCNT_KCAL": "Kcal from protein",
+                "FAT_KCAL": "Kcal from fat",
+                "CHOCDF_KCAL": "Kcal from carbohydrates"
+            }
+
+            formatted_text += "-------\nTotal Nutrients KCal.\n"
             for nutrient, value in filtered_data["totalNutrientsKCal"].items():
-                formatted_text += f"  {nutrient}: {value['quantity']} {value['unit']}\n"
+                nutrient_name = nutrient_mapping.get(nutrient, nutrient)
+                formatted_text += f"  {nutrient_name}: {value['quantity']} {value['unit']}\n"
 
             return formatted_text
-            # return filtered_data
+        
         else:
             return {"success": False, "error": f"Error: {response.status_code}"}
         
