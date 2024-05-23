@@ -156,12 +156,10 @@ def get_nutrition_analysis_single_ingredient(request):
 
         parameters = request_data.get("intentInfo", {}).get("parameters", {})
         item_to_analyze = parameters.get("item", {}).get("resolvedValue", [])
-        print("paramatersss:" , parameters)
-        print("item to analysze: " , item_to_analyze)
+        
         nutrition_data = get_nutrition_data(item_to_analyze)
-        print("nuitritionas data", nutrition_data)
         response_nutrition_data = create_dialogflow_response(f"{nutrition_data}")
-        print ("response_nutrition_data", response_nutrition_data)
+
         return response_nutrition_data
     except Exception as e:
         print("Error analyzing nutrition data:", e)
@@ -180,12 +178,10 @@ def get_recipes_search(request):
 
         parameters = request_data.get("intentInfo", {}).get("parameters", {})
         item_to_search_recipe = parameters.get("item", {}).get("resolvedValue", [])
-        print("paramatersss:" , parameters)
-        print("item to analysze: " , item_to_search_recipe)
+
         recipe_data = get_recipe_data(item_to_search_recipe)
-        print("nuitritionas data", recipe_data)
         response_recipe_data = create_dialogflow_response(f"{recipe_data}")
-        print ("response_nutrition_data", response_recipe_data)
+
         return response_recipe_data
     except Exception as e:
         print("Error searching recipes data:", e)

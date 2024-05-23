@@ -92,7 +92,7 @@ def get_nutrition_data(ingredient):
                 "CHOCDF_KCAL": "Kcal from carbohydrates"
             }
 
-            formatted_text += "-------\nTotal Nutrients KCal.\n"
+            formatted_text += "------------------\nTotal Nutrients KCal.\n"
             for nutrient, value in filtered_data["totalNutrientsKCal"].items():
                 nutrient_name = nutrient_mapping.get(nutrient, nutrient)
                 formatted_text += f"  {nutrient_name}: {value['quantity']} {value['unit']}\n"

@@ -59,7 +59,7 @@ def get_recipe_data(ingredient):
             for i, recipe_info in enumerate(recipes_info, 1):
                 formatted_text += f"Recipe {i}:\n"
                 formatted_text += f"Name: {recipe_info['name']}\n"
-                formatted_text += f"Image URL: {recipe_info['image_url']}\n"
+                # formatted_text += f"Image URL: {recipe_info['image_url']}\n"
                 formatted_text += f"Calories: {recipe_info['calories']['quantity']} {recipe_info['calories']['unit']}\n"
                 formatted_text += "Ingredients:\n"
                 for ingredient in recipe_info["ingredients"]:
@@ -76,4 +76,4 @@ def get_recipe_data(ingredient):
         return e
 
 # Example usage
-print(get_recipe_data("chicken breast"))
+# print(get_recipe_data("chicken breast"))
