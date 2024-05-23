@@ -5,6 +5,7 @@ from firebase_functions import https_fn, options
 import json
 from gemini_api_script import categorize_grocery_list
 from edamam_nutrition_api_script import get_nutrition_data
+from edamam_recipe_api_script import get_recipe_data
 
 # Helper function to create Dialogflow response
 def create_dialogflow_response(message_text):
@@ -144,7 +145,7 @@ def clear_grocery_list(request):
         return response_error, 500
 
 
-# HTTP REQUEST: get nutrion analysis from Edamam.com API
+# HTTP REQUEST: get nutrition analysis from Edamam.com API
 @https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["get"]))
 def get_nutrition_analysis_single_ingredient(request):
     try:
@@ -165,4 +166,28 @@ def get_nutrition_analysis_single_ingredient(request):
     except Exception as e:
         print("Error analyzing nutrition data:", e)
         response_error = create_dialogflow_response(f"Error analyzing nutrition data: {e}")
+        return response_error, 500
+    
+
+# HTTP REQUEST: get recipes searching from Edamam.com API
+@https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["get"]))
+def get_recipes_search(request):
+    try:
+        # Get JSON data from HTTP request
+        request_data = request.get_json()
+        if request_data is None:
+            return {"success": False, "error": "Request data is missing"}, 400
+
+        parameters = request_data.get("intentInfo", {}).get("parameters", {})
+        item_to_search_recipe = parameters.get("item", {}).get("resolvedValue", [])
+        print("paramatersss:" , parameters)
+        print("item to analysze: " , item_to_search_recipe)
+        recipe_data = get_recipe_data(item_to_search_recipe)
+        print("nuitritionas data", recipe_data)
+        response_recipe_data = create_dialogflow_response(f"{recipe_data}")
+        print ("response_nutrition_data", response_recipe_data)
+        return response_recipe_data
+    except Exception as e:
+        print("Error searching recipes data:", e)
+        response_error = create_dialogflow_response(f"Error searching recipes data: {e}")
         return response_error, 500
