@@ -3,6 +3,7 @@ import firebase_admin
 from firebase_admin import credentials, db
 from firebase_functions import https_fn, options
 import json
+import requests
 from gemini_api_script import categorize_grocery_list
 from edamam_nutrition_api_script import get_nutrition_data
 from edamam_recipe_api_script import get_recipe_data
@@ -24,12 +25,96 @@ def create_dialogflow_response(message_text):
     }
     return json.dumps(response)
 
+def load_telegram_key(file_path):
+    """Loads the Telegram botfather API key from a JSON file."""
+
+    with open(file_path, "r") as f:
+        credentials = json.load(f)
+    api_key = credentials.get("TELEGRAM_BOT_KEY")
+    if not api_key:
+        raise ValueError(f"Missing 'gemini_api_key' key in {file_path}.")
+    return api_key
+
+def load_dialogflow(file_path):
+    """Loads the Dialogflow infos from a JSON file."""
+
+    with open(file_path, "r") as f:
+        credentials = json.load(f)
+    project_ID = credentials.get("PROJECT_ID")
+    agent_ID = credentials.get("AGENT_ID")
+    if not project_ID or not agent_ID:
+        raise ValueError(f"Missing 'PROJECT_ID' or 'AGENT_ID' in {file_path}.")
+    return project_ID, agent_ID
+
 # Initialize Firebase app
 cred = credentials.Certificate("chiave.json")
 firebase_admin.initialize_app(cred, {'databaseURL': 'https://nlp-chatbot-project-420413-default-rtdb.europe-west1.firebasedatabase.app/'})
 
+# Token del bot Telegram
+TELEGRAM_BOT_TOKEN = load_telegram_key("telegram_bot_father_key.json")
+
+# Configurazione del client Dialogflow CX
+PROJECT_ID, AGENT_ID = load_dialogflow("dialogflow_infos.json")
+LOCATION = 'europe-west2' 
+LANGUAGE_CODE = 'en' 
+
+def detect_intent_texts(text):
+    url = f"https://dialogflow.googleapis.com/v3/projects/{PROJECT_ID}/locations/{LOCATION}/agents/{AGENT_ID}/sessions/{text}/detectIntent"
+    headers = {
+        'Authorization': f'Bearer {TELEGRAM_BOT_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "query_input": {
+            "text": {
+                "text": text,
+                "language_code": LANGUAGE_CODE
+            }
+        }
+    }
+    response = requests.post(url, headers=headers, json=data)
+    return response.json()
+
+def send_message_to_telegram(chat_id, text):
+    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+    payload = {
+        'chat_id': chat_id,
+        'text': text
+    }
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    response = requests.post(url, json=payload, headers=headers)
+    return response.json()
+
 # Reference to grocery list in database
 grocery_list_ref = db.reference("grocery_list")
+
+# Firebase Function per gestire le richieste da Telegram
+@https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["post"]))
+def telegram_webhook(request):
+    try:
+        request_data = request.get_json()
+        if not request_data:
+            return {"success": False, "error": "Request data is missing"}, 400
+
+        message = request_data.get('message', {})
+        chat_id = message.get('chat', {}).get('id')
+        text = message.get('text')
+
+        if not chat_id or not text:
+            return {"success": False, "error": "Invalid message format"}, 400
+
+        # Chiamata a Dialogflow CX
+        dialogflow_response = detect_intent_texts(text)
+        response_text = dialogflow_response.get('queryResult', {}).get('fulfillmentText', 'Nessuna risposta trovata.')
+
+        # Invia risposta a Telegram
+        telegram_response = send_message_to_telegram(chat_id, response_text)
+        return telegram_response
+    except Exception as e:
+        print("Error handling telegram webhook:", e)
+        return {"success": False, "error": str(e)}, 500
 
 # HTTP REQUEST: add new elements to grocery list
 @https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["post"]))
