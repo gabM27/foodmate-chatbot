@@ -5,3 +5,5 @@
 !gemini_api_script.py
 !edamam_nutrition_api_script.py
 !edamam_recipe_api_script.py
+!telegram_bot_father_script.py
+!requirements.txt

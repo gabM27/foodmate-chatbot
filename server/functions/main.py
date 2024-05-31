@@ -3,6 +3,9 @@ import firebase_admin
 from firebase_admin import credentials, db
 from firebase_functions import https_fn, options
 import json
+# from flask import Flask
+# import os
+
 import requests
 from gemini_api_script import categorize_grocery_list
 from edamam_nutrition_api_script import get_nutrition_data
@@ -73,7 +76,13 @@ def detect_intent_texts(text):
         }
     }
     response = requests.post(url, headers=headers, json=data)
-    return response.json()
+    try:
+        response_data = response.json()
+        return response_data
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON response from Dialogflow: {e}")
+        print(f"Response content: {response.content}")
+        return None
 
 def send_message_to_telegram(chat_id, text):
     url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
@@ -85,7 +94,13 @@ def send_message_to_telegram(chat_id, text):
         'Content-Type': 'application/json'
     }
     response = requests.post(url, json=payload, headers=headers)
-    return response.json()
+    try:
+        response_data = response.json()
+        if not response_data.get("ok"):
+            print(f"Error from Telegram: {response_data}")
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON response from Telegram: {e}")
+        print(f"Response content: {response.content}")
 
 # Reference to grocery list in database
 grocery_list_ref = db.reference("grocery_list")
@@ -107,11 +122,14 @@ def telegram_webhook(request):
 
         # Chiamata a Dialogflow CX
         dialogflow_response = detect_intent_texts(text)
+        if not dialogflow_response:
+            return {"success": False, "error": "Error from Dialogflow"}, 500
+        
         response_text = dialogflow_response.get('queryResult', {}).get('fulfillmentText', 'Nessuna risposta trovata.')
 
         # Invia risposta a Telegram
-        telegram_response = send_message_to_telegram(chat_id, response_text)
-        return telegram_response
+        send_message_to_telegram(chat_id, response_text)
+        return {"success": True}, 200
     except Exception as e:
         print("Error handling telegram webhook:", e)
         return {"success": False, "error": str(e)}, 500
@@ -272,3 +290,39 @@ def get_recipes_search(request):
         print("Error searching recipes data:", e)
         response_error = create_dialogflow_response(f"Error searching recipes data: {e}")
         return response_error, 500
+    
+# if __name__ == "__main__":
+#     from flask import Flask, request
+#     app = Flask(__name__)
+
+#     @app.route('/telegram_webhook', methods=['POST'])
+#     def telegram_webhook_route():
+#         return telegram_webhook(request)
+
+#     @app.route('/add_to_grocery_list', methods=['POST'])
+#     def add_to_grocery_list_route():
+#         return add_to_grocery_list(request)
+
+#     @app.route('/remove_from_grocery_list', methods=['DELETE'])
+#     def remove_from_grocery_list_route():
+#         return remove_from_grocery_list(request)
+
+#     @app.route('/view_grocery_list', methods=['GET'])
+#     def view_grocery_list_route():
+#         return view_grocery_list(request)
+
+#     @app.route('/clear_grocery_list', methods=['DELETE'])
+#     def clear_grocery_list_route():
+#         return clear_grocery_list(request)
+
+#     @app.route('/get_nutrition_analysis_single_ingredient', methods=['GET'])
+#     def get_nutrition_analysis_single_ingredient_route():
+#         return get_nutrition_analysis_single_ingredient(request)
+
+#     @app.route('/get_recipes_search', methods=['GET'])
+#     def get_recipes_search_route():
+#         return get_recipes_search(request)
+
+#     # Run the app
+#     port = int(os.environ.get('PORT', 8080))
+#     app.run(host='0.0.0.0', port=port)
