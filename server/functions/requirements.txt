@@ -1,5 +1,7 @@
 firebase_functions~=0.1.0
 firebase_admin
 google-cloud-dialogflow-cx
+google-cloud-storage
 google.generativeai
 requests
+packaging

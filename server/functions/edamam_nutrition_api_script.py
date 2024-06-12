@@ -97,7 +97,10 @@ def get_nutrition_data(ingredient):
                 nutrient_name = nutrient_mapping.get(nutrient, nutrient)
                 formatted_text += f"  {nutrient_name}: {value['quantity']} {value['unit']}\n"
 
-            return formatted_text
+            if filtered_data["food_name"] == "Unknown":
+                return f"Sorry, the database of edamam.com did not find what you were looking for."
+            else:
+                return formatted_text
         
         else:
             return {"success": False, "error": f"Error: {response.status_code}"}

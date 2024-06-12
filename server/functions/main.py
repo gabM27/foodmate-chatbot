@@ -3,13 +3,20 @@ import firebase_admin
 from firebase_admin import credentials, db
 from firebase_functions import https_fn, options
 import json
-# from flask import Flask
-# import os
-
+import logging
 import requests
-from gemini_api_script import categorize_grocery_list
+
 from edamam_nutrition_api_script import get_nutrition_data
 from edamam_recipe_api_script import get_recipe_data
+from gemini_api_script import categorize_grocery_list
+
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
+
+# Initialize logging
+logging.basicConfig(level=logging.DEBUG)
 
 # Helper function to create Dialogflow response
 def create_dialogflow_response(message_text):
@@ -29,18 +36,14 @@ def create_dialogflow_response(message_text):
     return json.dumps(response)
 
 def load_telegram_key(file_path):
-    """Loads the Telegram botfather API key from a JSON file."""
-
     with open(file_path, "r") as f:
         credentials = json.load(f)
     api_key = credentials.get("TELEGRAM_BOT_KEY")
     if not api_key:
-        raise ValueError(f"Missing 'gemini_api_key' key in {file_path}.")
+        raise ValueError(f"Missing 'TELEGRAM_BOT_KEY' key in {file_path}.")
     return api_key
 
 def load_dialogflow(file_path):
-    """Loads the Dialogflow infos from a JSON file."""
-
     with open(file_path, "r") as f:
         credentials = json.load(f)
     project_ID = credentials.get("PROJECT_ID")
@@ -55,57 +58,19 @@ firebase_admin.initialize_app(cred, {'databaseURL': 'https://nlp-chatbot-project
 
 # Token del bot Telegram
 TELEGRAM_BOT_TOKEN = load_telegram_key("telegram_bot_father_key.json")
-
-# Configurazione del client Dialogflow CX
 PROJECT_ID, AGENT_ID = load_dialogflow("dialogflow_infos.json")
-LOCATION = 'europe-west2' 
-LANGUAGE_CODE = 'en' 
+REGION = "europe-west2"  
+LANGUAGE_CODE = 'en'
 
-def detect_intent_texts(text):
-    url = f"https://dialogflow.googleapis.com/v3/projects/{PROJECT_ID}/locations/{LOCATION}/agents/{AGENT_ID}/sessions/{text}/detectIntent"
-    headers = {
-        'Authorization': f'Bearer {TELEGRAM_BOT_TOKEN}',
-        'Content-Type': 'application/json'
-    }
-    data = {
-        "query_input": {
-            "text": {
-                "text": text,
-                "language_code": LANGUAGE_CODE
-            }
-        }
-    }
-    response = requests.post(url, headers=headers, json=data)
-    try:
-        response_data = response.json()
-        return response_data
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON response from Dialogflow: {e}")
-        print(f"Response content: {response.content}")
-        return None
+# Configura il logging
+logging.basicConfig(level=logging.DEBUG)
 
-def send_message_to_telegram(chat_id, text):
-    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
-    payload = {
-        'chat_id': chat_id,
-        'text': text
-    }
-    headers = {
-        'Content-Type': 'application/json'
-    }
-    response = requests.post(url, json=payload, headers=headers)
-    try:
-        response_data = response.json()
-        if not response_data.get("ok"):
-            print(f"Error from Telegram: {response_data}")
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON response from Telegram: {e}")
-        print(f"Response content: {response.content}")
+# Carica le credenziali di servizio dal file JSON
+DIALOGFLOW_CREDENTIALS = service_account.Credentials.from_service_account_file(
+    'chiave.json',
+    scopes=['https://www.googleapis.com/auth/cloud-platform']
+)
 
-# Reference to grocery list in database
-grocery_list_ref = db.reference("grocery_list")
-
-# Firebase Function per gestire le richieste da Telegram
 @https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["post"]))
 def telegram_webhook(request):
     try:
@@ -113,32 +78,150 @@ def telegram_webhook(request):
         if not request_data:
             return {"success": False, "error": "Request data is missing"}, 400
 
-        message = request_data.get('message', {})
-        chat_id = message.get('chat', {}).get('id')
-        text = message.get('text')
+        logging.debug(f"Request data: {request_data}")
 
-        if not chat_id or not text:
+        message = None
+        update_id = request_data.get('update_id')
+
+        if 'message' in request_data:
+            message = request_data['message']
+        elif 'edited_message' in request_data:
+            message = request_data['edited_message']
+        elif 'channel_post' in request_data:
+            message = request_data['channel_post']
+        elif 'edited_channel_post' in request_data:
+            message = request_data['edited_channel_post']
+        elif 'my_chat_member' in request_data:
+            logging.debug("Chat member update received, no action required.")
+            return {"success": True, "message": "Chat member update received."}, 200
+        else:
+            logging.error("Invalid message format")
             return {"success": False, "error": "Invalid message format"}, 400
 
-        # Chiamata a Dialogflow CX
-        dialogflow_response = detect_intent_texts(text)
-        if not dialogflow_response:
-            return {"success": False, "error": "Error from Dialogflow"}, 500
+        if not message:
+            logging.error("No message found in request data")
+            return {"success": False, "error": "No message found in request data"}, 400
+
+        chat_id = message.get('chat', {}).get('id')
+        text = message.get('text')
+        user_id = message.get('from', {}).get('id')
+        username = message.get('from', {}).get('username', '')
+        message_id = message.get('message_id')
+        date = message.get('date')
+
+        # Aggiungi logging per verificare i parametri estratti
+        # logging.debug(f"chat_id: {chat_id}, text: {text}, user_id: {user_id}, username: {username}, message_id: {message_id}, date: {date}, update_id: {update_id}")
+
+        if not chat_id or not text:
+            # logging.error("Invalid message format")
+            return {"success": False, "error": "Invalid message format"}, 400
+
+        session_id = str(chat_id)
         
-        response_text = dialogflow_response.get('queryResult', {}).get('fulfillmentText', 'Nessuna risposta trovata.')
+        # Chiamata a Dialogflow CX con "it" come LANGUAGE_CODE
+        dialogflow_response = detect_intent_texts(session_id, text, user_id, username, chat_id, update_id, message_id, date)
+        logging.debug(f"Dialogflow response: {dialogflow_response}")
+
+        # Estrai tutti i messaggi di testo da responseMessages
+        response_messages = dialogflow_response.get('queryResult', {}).get('responseMessages', [])
+        response_texts = []
+        for message in response_messages:
+            if 'text' in message and 'text' in message['text']:
+                response_texts.extend(message['text']['text'])
+
+        # Unisci tutti i messaggi di testo in una singola stringa
+        response_text = ' '.join(response_texts) if response_texts else 'No answers found.'
+
+        # response_text = dialogflow_response.get('queryResult', {}).get('responseMessages',{}).get('text',{}).get('text', 'No answers found.')
 
         # Invia risposta a Telegram
-        send_message_to_telegram(chat_id, response_text)
-        return {"success": True}, 200
+        telegram_response = send_message_to_telegram(chat_id, response_text)
+        logging.debug(f"Telegram response: {telegram_response}")
+        return {"success": True, "response": telegram_response}
     except Exception as e:
-        print("Error handling telegram webhook:", e)
+        logging.error(f"Error handling telegram webhook: {e}")
         return {"success": False, "error": str(e)}, 500
+
+def detect_intent_texts(session_id, text, user_id, username, chat_id, update_id, message_id, date):
+    # logging.debug(f"detect_intent_texts called with session_id: {session_id}, text: {text}, user_id: {user_id}, username: {username}, chat_id: {chat_id}, update_id: {update_id}, message_id: {message_id}, date: {date}")
+
+    url = f"https://{REGION}-dialogflow.googleapis.com/v3/projects/{PROJECT_ID}/locations/{REGION}/agents/{AGENT_ID}/sessions/{session_id}:detectIntent"
+
+    # Aggiorna il token se necessario
+    auth_req = Request()
+    DIALOGFLOW_CREDENTIALS.refresh(auth_req)
+    token = DIALOGFLOW_CREDENTIALS.token
+
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+
+    data = {
+        "query_input": {
+            "language_code": LANGUAGE_CODE,
+            "text": {
+                "text": text,
+            }
+        },
+        "query_params": {
+            "payload": {
+                "data": {
+                    "update_id": update_id,
+                    "message": {
+                        "message_id": message_id,
+                        "from": {
+                            "id": user_id,
+                            "is_bot": False,
+                            "first_name": username.split()[0] if username else "",
+                            "last_name": username.split()[-1] if username else "",
+                            "username": username,
+                            "language_code": LANGUAGE_CODE
+                        },
+                        "chat": {
+                            "id": chat_id,
+                            "first_name": username.split()[0] if username else "",
+                            "last_name": username.split()[-1] if username else "",
+                            "username": username,
+                            "type": "private"
+                        },
+                        "date": date,
+                        "text": text
+                    }
+                },
+                "source": "telegram"
+            }
+        }
+    }
+
+    # Aggiungi un log per stampare l'intero payload JSON
+    # logging.debug(f"Payload inviato a Dialogflow: {json.dumps(data, indent=2)}")
+
+    response = requests.post(url, headers=headers, json=data)
+    logging.debug(f"Ricevuta risposta da Dialogflow: {response.status_code} {response.text}")
+    return response.json()
+
+def send_message_to_telegram(chat_id, text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': chat_id,
+        'text': text
+    }
+    headers = {
+        'Content-Type': 'application/json'
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    logging.debug(f"Ricevuta risposta da Telegram: {response.status_code} {response.text}")
+    return response.json()
+
+# Reference to grocery list in database
+grocery_list_ref = db.reference("grocery_list")
 
 # HTTP REQUEST: add new elements to grocery list
 @https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["post"]))
 def add_to_grocery_list(request):
     try:
-        # Get JSON data from HTTP request
         request_data = request.get_json()
         if request_data is None:
             return {"success": False, "error": "Request data is missing"}, 400
@@ -146,14 +229,12 @@ def add_to_grocery_list(request):
         parameters = request_data.get("intentInfo", {}).get("parameters", {})
         items_to_add = parameters.get("item", {}).get("resolvedValue", [])
 
-        # Get current items in grocery list or set to empty list if None
         current_items = grocery_list_ref.get()
         if current_items is None:
             current_items = []
         else:
             current_items = list(current_items.values())
 
-        # Add items that are not already in the list
         items_added = []
         for item in items_to_add:
             if item not in current_items:
@@ -176,7 +257,6 @@ def add_to_grocery_list(request):
 @https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["delete"]))
 def remove_from_grocery_list(request):
     try:
-        # Get JSON data from HTTP request
         request_data = request.get_json()
         if request_data is None:
             return {"success": False, "error": "Request data is missing"}, 400
@@ -247,20 +327,19 @@ def clear_grocery_list(request):
         response_error = create_dialogflow_response(f"Error removing all items from grocery list: {e}")
         return response_error, 500
 
-
 # HTTP REQUEST: get nutrition analysis from Edamam.com API
 @https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["get"]))
 def get_nutrition_analysis_single_ingredient(request):
     try:
-        # Get JSON data from HTTP request
         request_data = request.get_json()
         if request_data is None:
             return {"success": False, "error": "Request data is missing"}, 400
 
         parameters = request_data.get("intentInfo", {}).get("parameters", {})
         item_to_analyze = parameters.get("item", {}).get("resolvedValue", [])
-        
+        logging.debug(f"item to analyze: {item_to_analyze}")
         nutrition_data = get_nutrition_data(item_to_analyze)
+        logging.debug(f"nutrition_data : {nutrition_data }")
         response_nutrition_data = create_dialogflow_response(f"{nutrition_data}")
 
         return response_nutrition_data
@@ -268,13 +347,11 @@ def get_nutrition_analysis_single_ingredient(request):
         print("Error analyzing nutrition data:", e)
         response_error = create_dialogflow_response(f"Error analyzing nutrition data: {e}")
         return response_error, 500
-    
 
 # HTTP REQUEST: get recipes searching from Edamam.com API
 @https_fn.on_request(cors=options.CorsOptions(cors_origins="*", cors_methods=["get"]))
 def get_recipes_search(request):
     try:
-        # Get JSON data from HTTP request
         request_data = request.get_json()
         if request_data is None:
             return {"success": False, "error": "Request data is missing"}, 400
@@ -290,39 +367,3 @@ def get_recipes_search(request):
         print("Error searching recipes data:", e)
         response_error = create_dialogflow_response(f"Error searching recipes data: {e}")
         return response_error, 500
-    
-# if __name__ == "__main__":
-#     from flask import Flask, request
-#     app = Flask(__name__)
-
-#     @app.route('/telegram_webhook', methods=['POST'])
-#     def telegram_webhook_route():
-#         return telegram_webhook(request)
-
-#     @app.route('/add_to_grocery_list', methods=['POST'])
-#     def add_to_grocery_list_route():
-#         return add_to_grocery_list(request)
-
-#     @app.route('/remove_from_grocery_list', methods=['DELETE'])
-#     def remove_from_grocery_list_route():
-#         return remove_from_grocery_list(request)
-
-#     @app.route('/view_grocery_list', methods=['GET'])
-#     def view_grocery_list_route():
-#         return view_grocery_list(request)
-
-#     @app.route('/clear_grocery_list', methods=['DELETE'])
-#     def clear_grocery_list_route():
-#         return clear_grocery_list(request)
-
-#     @app.route('/get_nutrition_analysis_single_ingredient', methods=['GET'])
-#     def get_nutrition_analysis_single_ingredient_route():
-#         return get_nutrition_analysis_single_ingredient(request)
-
-#     @app.route('/get_recipes_search', methods=['GET'])
-#     def get_recipes_search_route():
-#         return get_recipes_search(request)
-
-#     # Run the app
-#     port = int(os.environ.get('PORT', 8080))
-#     app.run(host='0.0.0.0', port=port)
