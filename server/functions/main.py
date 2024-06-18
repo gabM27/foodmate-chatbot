@@ -130,9 +130,9 @@ def telegram_webhook(request):
                 response_texts.extend(message['text']['text'])
 
         # Unisci tutti i messaggi di testo in una singola stringa
-        response_text = ' '.join(response_texts) if response_texts else 'No answers found.'
+        response_text = ' '.join(response_texts) if response_texts else "I didn't get that. May you try again please?"
 
-        # response_text = dialogflow_response.get('queryResult', {}).get('responseMessages',{}).get('text',{}).get('text', 'No answers found.')
+        # response_text = dialogflow_response.get('queryResult', {}).get('responseMessages',{}).get('text',{}).get('text', 'I didn't get that. May you try again please?')
 
         # Invia risposta a Telegram
         telegram_response = send_message_to_telegram(chat_id, response_text)
