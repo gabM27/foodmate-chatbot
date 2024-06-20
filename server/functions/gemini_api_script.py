@@ -20,7 +20,18 @@ def categorize_grocery_list(grocery_list):
 
         model = genai.GenerativeModel()
 
-        prompt = f"You have to categorize items in a grocery list to help a customer finding the right supermarket section for every product in the list. I will give you in input the list and you have to return more list divided by category (supermarket section). The grocery list includes: {grocery_list}. Please categorize the items by supermarket section. Be careful to be precise in your categorization"
+        prompt = (
+            f"You have to categorize items in a grocery list "
+            f"to help a customer finding the right "
+            f"supermarket section for every product in the list. "
+            f"I will give you in input the list "
+            f"and you have to return more list divided by " 
+            f"category (supermarket section). The grocery "
+            f"list includes: {grocery_list}. "
+            f"Please categorize the items by supermarket " 
+            f"section. Be careful to be "
+            f"precise in your categorization")
+
         response = model.generate_content(prompt)
 
         return response.text
@@ -30,6 +41,6 @@ def categorize_grocery_list(grocery_list):
         return []  # Return an empty list on error
 
 # Example usage
-# grocery_list = ["Milk", "Bread", "Apples", "Bananas", "Eggs", "Laundry detergent", "Water bottle", "beer", "almonds", "peanuts butter"]
+# grocery_list = ["Milk", "Bread", "Apples", "Eggs", "beer", "almonds", "juice"]
 # categorized_list = categorize_grocery_list(grocery_list)
 # print(categorized_list)

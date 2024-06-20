@@ -33,7 +33,7 @@ def get_recipe_data(ingredient):
             for i, recipe in enumerate(data.get("hits", [])[:4], 1):
                 recipe_data = recipe["recipe"]
 
-                # Controlla se il valore delle calorie è un dizionario
+                # Controllo se il valore delle calorie è un dizionario
                 if isinstance(recipe_data.get("calories"), dict):
                     calories_quantity = recipe_data["calories"].get("quantity", "N/A")
                     calories_unit = recipe_data["calories"].get("unit", "")
@@ -41,7 +41,7 @@ def get_recipe_data(ingredient):
                     calories_quantity = recipe_data.get("calories", "N/A")
                     calories_unit = ""
 
-                # Selezioniamo solo i campi desiderati con quantitativo e unità di misura
+                # Seleziono solo i campi desiderati con quantitativo e unità di misura
                 recipe_info = {
                     "name": recipe_data.get("label", "Unknown"),
                     "image_url": recipe_data.get("image"),
@@ -76,4 +76,4 @@ def get_recipe_data(ingredient):
         return e
 
 # Example usage
-# print(get_recipe_data("chicken breast"))
+print(get_recipe_data("chicken breast"))

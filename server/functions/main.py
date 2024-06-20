@@ -58,6 +58,7 @@ firebase_admin.initialize_app(cred, {'databaseURL': 'https://nlp-chatbot-project
 
 # Token del bot Telegram
 TELEGRAM_BOT_TOKEN = load_telegram_key("telegram_bot_father_key.json")
+# Informazioni riguardanti il progetto dialogflow
 PROJECT_ID, AGENT_ID = load_dialogflow("dialogflow_infos.json")
 REGION = "europe-west2"  
 LANGUAGE_CODE = 'en'
@@ -65,7 +66,7 @@ LANGUAGE_CODE = 'en'
 # Configura il logging
 logging.basicConfig(level=logging.DEBUG)
 
-# Carica le credenziali di servizio dal file JSON
+# Caricamento le credenziali di servizio dal file JSON
 DIALOGFLOW_CREDENTIALS = service_account.Credentials.from_service_account_file(
     'chiave.json',
     scopes=['https://www.googleapis.com/auth/cloud-platform']
@@ -109,7 +110,6 @@ def telegram_webhook(request):
         message_id = message.get('message_id')
         date = message.get('date')
 
-        # Aggiungi logging per verificare i parametri estratti
         # logging.debug(f"chat_id: {chat_id}, text: {text}, user_id: {user_id}, username: {username}, message_id: {message_id}, date: {date}, update_id: {update_id}")
 
         if not chat_id or not text:
@@ -122,14 +122,13 @@ def telegram_webhook(request):
         dialogflow_response = detect_intent_texts(session_id, text, user_id, username, chat_id, update_id, message_id, date)
         logging.debug(f"Dialogflow response: {dialogflow_response}")
 
-        # Estrai tutti i messaggi di testo da responseMessages
+        # Estrazione di tutti i messaggi di testo da responseMessages
         response_messages = dialogflow_response.get('queryResult', {}).get('responseMessages', [])
         response_texts = []
         for message in response_messages:
             if 'text' in message and 'text' in message['text']:
                 response_texts.extend(message['text']['text'])
 
-        # Unisci tutti i messaggi di testo in una singola stringa
         response_text = ' '.join(response_texts) if response_texts else "I didn't get that. May you try again please?"
 
         # response_text = dialogflow_response.get('queryResult', {}).get('responseMessages',{}).get('text',{}).get('text', 'I didn't get that. May you try again please?')
@@ -193,10 +192,7 @@ def detect_intent_texts(session_id, text, user_id, username, chat_id, update_id,
             }
         }
     }
-
-    # Aggiungi un log per stampare l'intero payload JSON
-    # logging.debug(f"Payload inviato a Dialogflow: {json.dumps(data, indent=2)}")
-
+    
     response = requests.post(url, headers=headers, json=data)
     logging.debug(f"Ricevuta risposta da Dialogflow: {response.status_code} {response.text}")
     return response.json()

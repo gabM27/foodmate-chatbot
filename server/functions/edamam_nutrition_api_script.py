@@ -92,13 +92,16 @@ def get_nutrition_data(ingredient):
                 "CHOCDF_KCAL": "Kcal from carbohydrates"
             }
 
-            formatted_text += "------------------\nTotal Nutrients KCal.\n"
+            formatted_text += "------------------\n"
+            formatted_text += "Total Nutrients KCal.\n"
             for nutrient, value in filtered_data["totalNutrientsKCal"].items():
                 nutrient_name = nutrient_mapping.get(nutrient, nutrient)
-                formatted_text += f"  {nutrient_name}: {value['quantity']} {value['unit']}\n"
+                formatted_text += f" {nutrient_name}: {value['quantity']} {value['unit']}\n"
 
             if filtered_data["food_name"] == "Unknown":
-                return f"Sorry, the database of edamam.com did not find what you were looking for."
+                out = (f"Sorry, the database of Edamam.com "
+                       f"did not find what you were looking for.")
+                return out
             else:
                 return formatted_text
         
