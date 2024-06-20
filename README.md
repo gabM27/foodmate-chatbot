@@ -1,4 +1,6 @@
 # foodmate-chatbot
+The foodmate chatbot was developed for the NLP course project for the MSc in CS (2023-2024).
+
 The chatbot offers a grocery list where users can manage items and get reminders for similar products. It also provides recipe search based on keywords (ingredients), and offers nutritional analysis for food items (ingredients).
 
 The chatbot would provide the following services:
